@@ -1,0 +1,10 @@
+[package]
+name = "one_slot_agent"
+version = "1.0.0"
+authors = ["Father Of Egg"]
+edition = "2021"
+
+[dependencies]
+skyline = "0.2.1"
+skyline_smash = { git = "https://github.com/blu-dev/skyline-smash.git", features = ["weak_l2cvalue"] }
+smashline = { git = "https://github.com/hdr-development/smashline.git" }
