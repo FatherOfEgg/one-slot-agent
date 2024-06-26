@@ -288,6 +288,14 @@ impl SlottedAgent {
                 installer::slotted_weapon_installer_pre
             };
             self.agent.status(Pre, 0, f);
+
+            if let Some(slotted_info) = SLOTTED_AGENTS.read().get(&self.hash) {
+                if let Some(info) = slotted_info.iter().find(|info| self.color == info.color) {
+                    if info.frame.is_some() {
+                        self.agent.on_line(Main, installer::weapon_opff);
+                    }
+                }
+            }
         } else {
             self.agent.on_start(installer::on_start);
             self.agent.on_line(Main, installer::opff);

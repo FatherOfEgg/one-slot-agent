@@ -61,6 +61,25 @@ pub unsafe extern "C" fn opff(fighter: &mut L2CFighterCommon) {
     }
 }
 
+pub unsafe extern "C" fn weapon_opff(weapon: &mut L2CFighterCommon) {
+    let owner_id = WorkModule::get_int(weapon.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER);
+    let owner_boma = sv_battle_object::module_accessor(owner_id as u32);
+    let owner_entry_id = WorkModule::get_int(owner_boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+
+    let slotted_agents = SLOTTED_AGENTS.read();
+
+    if let Some(slotted_info) = slotted_agents.get(&weapon.agent_kind_hash.hash) {
+        if let Some(info_index) = SLOTTED_INFO_INDEX[owner_entry_id as usize] {
+            let info = &slotted_info[info_index];
+
+            if let Some(opff) = info.frame {
+                let f: OpffFunction = std::mem::transmute(opff);
+                f(weapon);
+            }
+        }
+    }
+}
+
 unsafe fn install_slotted_acmds(agent: &mut L2CFighterBase) {
     let category = utility::get_category(&mut *agent.module_accessor);
     if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
