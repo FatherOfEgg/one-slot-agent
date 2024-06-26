@@ -39,7 +39,7 @@ pub struct SlottedAgent {
     agent: Agent,
     name: String,
     hash: u64,
-    weapon_name: String,
+    is_weapon: bool,
     is_cloned: bool,
     color: Vec<i32>,
 }
@@ -47,8 +47,14 @@ pub struct SlottedAgent {
 impl SlottedAgent {
     pub fn new(agent: &str) -> Self {
         let fighter_id = util::get_fighter_id(agent);
+        let weapon_id = util::get_weapon_id(agent);
+        let mut is_weapon = false;
+
         let hash = if fighter_id != -1 {
             hash40(&("fighter_kind_".to_owned() + agent))
+        } else if weapon_id != -1 {
+            is_weapon = true;
+            hash40(&("weapon_kind_".to_owned() + agent))
         } else {
             hash40("invalid")
         };
@@ -56,7 +62,7 @@ impl SlottedAgent {
             agent: Agent::new(agent),
             name: agent.to_string(),
             hash,
-            weapon_name: String::new(),
+            is_weapon,
             is_cloned: false,
             color: Vec::new()
         }
@@ -78,13 +84,13 @@ impl SlottedAgent {
         self
     }
 
-    pub fn clone_weapon(&mut self, original_owner: &str, original_name: &str) -> &mut Self {
-        let weapon_name = original_owner.to_owned() + original_name;
+    pub fn weapon_cloned_from(&mut self, original_owner: &str, original_name: &str) -> &mut Self {
+        let weapon_name = original_owner.to_owned() + "_" + original_name;
         let weapon_id = util::get_weapon_id(weapon_name.as_str());
         
         if weapon_id != -1 {
-            self.weapon_name = weapon_name.clone();
-            self.hash = hash40(&("fighter_kind_".to_owned() + &weapon_name));
+            self.is_weapon = true;
+            self.hash = hash40(&("weapon_kind_".to_owned() + &weapon_name));
             self.is_cloned = true;
         };
         self
@@ -275,16 +281,23 @@ impl SlottedAgent {
             }
         }
 
-        if !self.weapon_name.is_empty() {
-            self.agent.status(Pre, 0, installer::slotted_weapon_installer_pre);
+        if self.is_weapon {
+            let f = if self.is_cloned {
+                installer::slotted_cloned_weapon_installer_pre
+            } else {
+                installer::slotted_weapon_installer_pre
+            };
+            self.agent.status(Pre, 0, f);
         } else {
             self.agent.on_start(installer::on_start);
             self.agent.on_line(Main, installer::opff);
-            self.agent.acmd("game_acmd_installer", installer::game_acmd_installer, Priority::Default);
-            self.agent.acmd("effect_acmd_installer", installer::effect_acmd_installer, Priority::Default);
-            self.agent.acmd("sound_acmd_installer", installer::sound_acmd_installer, Priority::Default);
-            self.agent.acmd("expression_acmd_installer", installer::expression_acmd_installer, Priority::Default);
         }
+
+        self.agent.acmd("game_acmd_installer", installer::game_acmd_installer, Priority::Default);
+        self.agent.acmd("effect_acmd_installer", installer::effect_acmd_installer, Priority::Default);
+        self.agent.acmd("sound_acmd_installer", installer::sound_acmd_installer, Priority::Default);
+        self.agent.acmd("expression_acmd_installer", installer::expression_acmd_installer, Priority::Default);
+
         self.agent.install();
 
         unsafe {

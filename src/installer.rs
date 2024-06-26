@@ -41,11 +41,8 @@ pub unsafe extern "C" fn opff(fighter: &mut L2CFighterCommon) {
             }
             if let Some(info_index) = SLOTTED_INFO_INDEX[entry_id as usize] {
                 let info = &slotted_info[info_index];
+                install_slotted_acmds(fighter);
                 install_slotted_statuses(fighter, &info.statuses);
-                MotionAnimcmdModule::call_script_single(fighter.module_accessor, *FIGHTER_ANIMCMD_GAME, Hash40::new("game_acmd_installer"), -1);
-                MotionAnimcmdModule::call_script_single(fighter.module_accessor, *FIGHTER_ANIMCMD_EFFECT, Hash40::new("effect_acmd_installer"), -1);
-                MotionAnimcmdModule::call_script_single(fighter.module_accessor, *FIGHTER_ANIMCMD_SOUND, Hash40::new("sound_acmd_installer"), -1);
-                MotionAnimcmdModule::call_script_single(fighter.module_accessor, *FIGHTER_ANIMCMD_EXPRESSION, Hash40::new("expression_acmd_installer"), -1);
             }
         }
 
@@ -64,14 +61,33 @@ pub unsafe extern "C" fn opff(fighter: &mut L2CFighterCommon) {
     }
 }
 
-unsafe fn install_slotted_statuses(fighter: &mut L2CFighterCommon, statuses: &[StatusScript]) {
+unsafe fn install_slotted_acmds(agent: &mut L2CFighterBase) {
+    let category = utility::get_category(&mut *agent.module_accessor);
+    if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_GAME, Hash40::new("game_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EFFECT, Hash40::new("effect_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_SOUND, Hash40::new("sound_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EXPRESSION, Hash40::new("expression_acmd_installer"), -1);
+    } else {
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_GAME, Hash40::new("game_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_EFFECT, Hash40::new("effect_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_SOUND, Hash40::new("sound_acmd_installer"), -1);
+    }
+}
+
+unsafe fn install_slotted_statuses(agent: &mut L2CFighterBase, statuses: &[StatusScript]) -> bool {
+    let mut restore_original = true;
     for s in statuses {
-        fighter.sv_set_status_func(
+        if s.kind == 0 && s.line == StatusLine::Pre {
+            restore_original = false;
+        }
+        agent.sv_set_status_func(
             s.kind.into(),
             (s.line as i32).into(),
             &mut *(s.function as *mut skyline::libc::c_void)
         );
     }
+    restore_original
 }
 
 macro_rules! create_acmd_installers {
@@ -79,7 +95,14 @@ macro_rules! create_acmd_installers {
         paste::paste! {
             $(
                 pub unsafe extern "C" fn [<$category _acmd_installer>](agent: &mut L2CAgentBase) {
-                    let entry_id = WorkModule::get_int(agent.module_accessor, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+                    let category = utility::get_category(&mut *agent.module_accessor);
+                    let boma = if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
+                        agent.module_accessor
+                    } else {
+                        let owner_id = WorkModule::get_int(agent.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER);
+                        sv_battle_object::module_accessor(owner_id as u32)
+                    };
+                    let entry_id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
                     let slotted_agents = SLOTTED_AGENTS.read();
 
                     if let Some(slotted_info) = slotted_agents.get(&agent.agent_kind_hash.hash) {
@@ -110,7 +133,14 @@ macro_rules! create_acmd_hubs {
         paste::paste! {
             $(
                 unsafe extern "C" fn [<$category _hub>](agent: &mut L2CAgentBase, _variadic: &mut Variadic) -> u64 {
-                    let entry_id = WorkModule::get_int(agent.module_accessor, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+                    let category = utility::get_category(&mut *agent.module_accessor);
+                    let boma = if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
+                        agent.module_accessor
+                    } else {
+                        let owner_id = WorkModule::get_int(agent.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER);
+                        sv_battle_object::module_accessor(owner_id as u32)
+                    };
+                    let entry_id = WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
                     let slotted_agents = SLOTTED_AGENTS.read();
 
                     if let Some(slotted_info) = slotted_agents.get(&agent.agent_kind_hash.hash) {
@@ -139,35 +169,43 @@ macro_rules! create_acmd_hubs {
 
 create_acmd_hubs!(game, effect, sound, expression);
 
+pub unsafe extern "C" fn weapon_installer_helper(weapon: &mut L2CWeaponCommon) -> bool {
+    let owner_id = WorkModule::get_int(weapon.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER);
+    let owner_boma = sv_battle_object::module_accessor(owner_id as u32);
+    let owner_entry_id = WorkModule::get_int(owner_boma, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
+
+    let slotted_agents = SLOTTED_AGENTS.read();
+
+    install_slotted_acmds(weapon);
+
+    let mut restore_original = true;
+
+    if let Some(slotted_info) = slotted_agents.get(&weapon.agent_kind_hash.hash) {
+        if let Some(info_index) = SLOTTED_INFO_INDEX[owner_entry_id as usize] {
+            let info = &slotted_info[info_index];
+            if !install_slotted_statuses(weapon, &info.statuses) {
+                restore_original = false;
+            }
+        }
+    }
+
+    restore_original
+}
+
 pub unsafe extern "C" fn slotted_weapon_installer_pre(weapon: &mut L2CWeaponCommon) -> L2CValue {
-//     let category = unsafe { utility::get_category(&mut *weapon.module_accessor) };
-//     let kind = unsafe { utility::get_kind(&mut *weapon.module_accessor) };
-//     let owner_id = WorkModule::get_int(weapon.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER);
-//     let owner_boma = sv_battle_object::module_accessor(owner_id as u32);
-//     let owner_color = WorkModule::get_int(owner_boma, *FIGHTER_INSTANCE_WORK_ID_INT_COLOR);
-//
-//     let slotted_statuses = SLOTTED_STATUSES.read();
-//
-//     if let Some(statuses) = slotted_statuses.get(&AgentInfo { category, kind }) {
-//         let mut found = false;
-//
-//         for status in statuses {
-//             if status.color.contains(&owner_color) {
-//                 found = true;
-//                 unsafe {
-//                     weapon.sv_set_status_func(
-//                         status.kind.into(),
-//                         (status.line as i32).into(),
-//                         &mut *(status.function as *mut skyline::libc::c_void)
-//                     );
-//                 }
-//             }
-//         }
-//
-//         if found {
-//             StatusModule::set_status_kind_interrupt(weapon.module_accessor, 0);
-//         }
-//     }
-//
+    let ret = original_status(Pre, weapon, 0);
+    if weapon_installer_helper(weapon) {
+        weapon.sv_set_status_func(
+            0.into(),
+            LUA_SCRIPT_STATUS_FUNC_STATUS_PRE.into(),
+            &mut *(ret as *const () as *mut skyline::libc::c_void)
+        );
+    }
+    ret(weapon)
+}
+
+pub unsafe extern "C" fn slotted_cloned_weapon_installer_pre(weapon: &mut L2CWeaponCommon) -> L2CValue {
+    weapon_installer_helper(weapon);
+    StatusModule::set_status_kind_interrupt(weapon.module_accessor, 0);
     1.into()
 }
