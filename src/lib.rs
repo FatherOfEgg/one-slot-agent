@@ -313,3 +313,26 @@ impl SlottedAgent {
         }
     }
 }
+
+pub fn get_colors(agent: &mut L2CAgentBase) -> Vec<i32> {
+    use smash::lib::lua_const::*;
+    use smash::app::{lua_bind::*, *};
+
+    let category = utility::get_category(unsafe { &mut *agent.module_accessor });
+    let boma = if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
+        agent.module_accessor
+    } else {
+        let owner_id = unsafe { WorkModule::get_int(agent.module_accessor, *WEAPON_INSTANCE_WORK_ID_INT_LINK_OWNER) };
+        unsafe { sv_battle_object::module_accessor(owner_id as u32) }
+    };
+    let color = unsafe { WorkModule::get_int(boma, *FIGHTER_INSTANCE_WORK_ID_INT_COLOR) };
+
+    if let Some(slotted_info) = SLOTTED_AGENTS.read().get(&agent.agent_kind_hash.hash) {
+        for (i, info) in slotted_info.iter().enumerate() {
+            if info.color.contains(&color) {
+                return info.color.clone();
+            }
+        }
+    }
+    Vec::new()
+}
