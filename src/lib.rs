@@ -12,6 +12,9 @@ use once_cell::sync::Lazy;
 use smashline::{*, locks::RwLock};
 use smash::hash40;
 
+const UUID_LEN: usize = 8;
+pub(crate) static mut UUID: [char; UUID_LEN] = ['\0'; UUID_LEN];
+
 pub(crate) struct AcmdScript {
     category: Acmd,
     function: AcmdFunction,
@@ -48,6 +51,27 @@ pub struct SlottedAgent {
 
 impl SlottedAgent {
     pub fn new(agent: &str) -> Self {
+        unsafe {
+            if UUID.iter().all(|&c| c == '\0') {
+                use std::fmt::Write;
+
+                const BUF_LEN: usize = UUID_LEN / 2;
+                let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
+                skyline::nn::os::GenerateRandomBytes(buf.as_mut_ptr() as *mut skyline::libc::c_void, BUF_LEN as u64);
+
+                let s = buf
+                    .iter()
+                    .fold(String::new(), |mut output, b| {
+                        let _ = write!(output, "{b:02x}");
+                        output
+                    });
+
+                for (i, c) in s.chars().enumerate() {
+                    UUID[i] = c;
+                }
+            }
+        }
+
         let fighter_id = util::get_fighter_id(agent);
         let weapon_id = util::get_weapon_id(agent);
         let mut is_weapon = false;
@@ -302,10 +326,11 @@ impl SlottedAgent {
             self.agent.on_line(Main, installer::opff);
         }
 
-        self.agent.acmd("game_acmd_installer", installer::game_acmd_installer, Priority::Default);
-        self.agent.acmd("effect_acmd_installer", installer::effect_acmd_installer, Priority::Default);
-        self.agent.acmd("sound_acmd_installer", installer::sound_acmd_installer, Priority::Default);
-        self.agent.acmd("expression_acmd_installer", installer::expression_acmd_installer, Priority::Default);
+        let uuid: String = unsafe { UUID.iter().collect() };
+        self.agent.acmd(&format!("game_acmd_installer{}", uuid), installer::game_acmd_installer, Priority::Default);
+        self.agent.acmd(&format!("effect_acmd_installer{}", uuid), installer::effect_acmd_installer, Priority::Default);
+        self.agent.acmd(&format!("sound_acmd_installer{}", uuid), installer::sound_acmd_installer, Priority::Default);
+        self.agent.acmd(&format!("expression_acmd_installer{}", uuid), installer::expression_acmd_installer, Priority::Default);
 
         self.agent.install();
 

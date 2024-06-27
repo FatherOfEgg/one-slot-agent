@@ -3,7 +3,7 @@ use smash::lib::lua_const::*;
 use smash::app::{lua_bind::*, *};
 use smash::hash40;
 
-use crate::{SLOTTED_AGENTS, ACMD_BASE_NAME, StatusScript};
+use crate::{SLOTTED_AGENTS, ACMD_BASE_NAME, StatusScript, UUID};
 
 type OpffFunction = unsafe extern "C" fn(&mut L2CFighterCommon);
 type OnStartFunction = unsafe extern "C" fn(&mut L2CFighterCommon);
@@ -91,15 +91,17 @@ pub unsafe extern "C" fn weapon_opff(weapon: &mut L2CFighterCommon) {
 
 unsafe fn install_slotted_acmds(agent: &mut L2CFighterBase) {
     let category = utility::get_category(&mut *agent.module_accessor);
+    let uuid: String = unsafe { UUID.iter().collect() };
+
     if category == *BATTLE_OBJECT_CATEGORY_FIGHTER {
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_GAME, Hash40::new("game_acmd_installer"), -1);
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EFFECT, Hash40::new("effect_acmd_installer"), -1);
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_SOUND, Hash40::new("sound_acmd_installer"), -1);
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EXPRESSION, Hash40::new("expression_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_GAME, Hash40::new(&format!("game_acmd_installer{}", uuid)), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EFFECT, Hash40::new(&format!("effect_acmd_installer{}", uuid)), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_SOUND, Hash40::new(&format!("sound_acmd_installer{}", uuid)), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *FIGHTER_ANIMCMD_EXPRESSION, Hash40::new(&format!("expression_acmd_installer{}", uuid)), -1);
     } else {
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_GAME, Hash40::new("game_acmd_installer"), -1);
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_EFFECT, Hash40::new("effect_acmd_installer"), -1);
-        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_SOUND, Hash40::new("sound_acmd_installer"), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_GAME, Hash40::new(&format!("game_acmd_installer{}", uuid)), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_EFFECT, Hash40::new(&format!("effect_acmd_installer{}", uuid)), -1);
+        MotionAnimcmdModule::call_script_single(agent.module_accessor, *WEAPON_ANIMCMD_SOUND, Hash40::new(&format!("sound_acmd_installer{}", uuid)), -1);
     }
 }
 
