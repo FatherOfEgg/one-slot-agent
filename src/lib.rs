@@ -25,6 +25,7 @@ pub(crate) struct StatusScript {
 
 struct SlottedInfo {
     color: Vec<i32>,
+    color_bool: Option<*const [bool; 256]>,
     frame: Option<*const ()>,
     on_start: Option<*const ()>,
     acmds: HashMap<u64, AcmdScript>,
@@ -42,6 +43,7 @@ pub struct SlottedAgent {
     is_weapon: bool,
     is_cloned: bool,
     color: Vec<i32>,
+    color_bool: Option<*const [bool; 256]>,
 }
 
 impl SlottedAgent {
@@ -64,18 +66,13 @@ impl SlottedAgent {
             hash,
             is_weapon,
             is_cloned: false,
-            color: Vec::new()
+            color: Vec::new(),
+            color_bool: None,
         }
     }
 
-    pub fn set_color(&mut self, color: Vec<bool>) -> &mut Self {
-        let mut c: Vec<i32> = Vec::new();
-        for (i, &v) in color.iter().enumerate() {
-            if v {
-                c.push(i as i32);
-            }
-        }
-        self.color = c;
+    pub fn set_color(&mut self, color: &[bool; 256]) -> &mut Self {
+        self.color_bool = Some(color as *const [bool; 256]);
         self
     }
 
@@ -144,6 +141,7 @@ impl SlottedAgent {
                 acmds.insert(hash, script);
                 SlottedInfo {
                     color: self.color.clone(),
+                    color_bool: self.color_bool,
                     frame: None,
                     on_start: None,
                     acmds,
@@ -190,6 +188,7 @@ impl SlottedAgent {
             slotted_info.push({
                 SlottedInfo {
                     color: self.color.clone(),
+                    color_bool: self.color_bool,
                     frame: None,
                     on_start: None,
                     acmds: HashMap::new(),
@@ -222,6 +221,7 @@ impl SlottedAgent {
             slotted_info.push({
                 SlottedInfo {
                     color: self.color.clone(),
+                    color_bool: self.color_bool,
                     frame,
                     on_start: None,
                     acmds: HashMap::new(),
@@ -259,6 +259,7 @@ impl SlottedAgent {
             slotted_info.push({
                 SlottedInfo {
                     color: self.color.clone(),
+                    color_bool: self.color_bool,
                     frame: None,
                     on_start: f,
                     acmds: HashMap::new(),

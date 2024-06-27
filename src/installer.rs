@@ -10,15 +10,27 @@ type OnStartFunction = unsafe extern "C" fn(&mut L2CFighterCommon);
 
 static mut INITIALIZED: [bool; 8] = [false; 8];
 static mut SLOTTED_INFO_INDEX: [Option<usize>; 8] = [None; 8];
+static mut OPFF: [Option<OpffFunction>; 8] = [None; 8];
 
 pub unsafe extern "C" fn on_start(fighter: &mut L2CFighterCommon) {
     INITIALIZED.fill(false);
     SLOTTED_INFO_INDEX.fill(None);
+    OPFF.fill(None);
 
-    let slotted_agents = SLOTTED_AGENTS.read();
+    let mut slotted_agents = SLOTTED_AGENTS.write();
 
-    if let Some(slotted_info) = slotted_agents.get(&fighter.agent_kind_hash.hash) {
-        for (i, info) in slotted_info.iter().enumerate() {
+    if let Some(slotted_info) = slotted_agents.get_mut(&fighter.agent_kind_hash.hash) {
+        for (i, info) in slotted_info.iter_mut().enumerate() {
+            if let Some(c) = info.color_bool {
+                if info.color.is_empty() {
+                    info.color = (*c).iter()
+                        .enumerate()
+                        .filter_map(|(i, &v)| if v { Some(i as i32) } else { None })
+                        .collect();
+                    info.color_bool = None;
+                }
+            }
+
             if let Some(on_start) = info.on_start {
                 let f: OnStartFunction = std::mem::transmute(on_start);
                 f(fighter);
@@ -30,34 +42,31 @@ pub unsafe extern "C" fn on_start(fighter: &mut L2CFighterCommon) {
 pub unsafe extern "C" fn opff(fighter: &mut L2CFighterCommon) {
     let entry_id = WorkModule::get_int(fighter.module_accessor, *FIGHTER_INSTANCE_WORK_ID_INT_ENTRY_ID);
     let color = WorkModule::get_int(fighter.module_accessor, *FIGHTER_INSTANCE_WORK_ID_INT_COLOR);
-    let slotted_agents = SLOTTED_AGENTS.read();
 
     if !INITIALIZED[entry_id as usize] {
+        let slotted_agents = SLOTTED_AGENTS.read();
+
         if let Some(slotted_info) = slotted_agents.get(&fighter.agent_kind_hash.hash) {
             for (i, info) in slotted_info.iter().enumerate() {
                 if info.color.contains(&color) {
                     SLOTTED_INFO_INDEX[entry_id as usize] = Some(i);
+
+                    install_slotted_acmds(fighter);
+                    install_slotted_statuses(fighter, &info.statuses);
+
+                    if let Some(opff) = info.frame {
+                        let f: OpffFunction = std::mem::transmute(opff);
+                        OPFF[entry_id as usize] = Some(f);
+                    }
                 }
-            }
-            if let Some(info_index) = SLOTTED_INFO_INDEX[entry_id as usize] {
-                let info = &slotted_info[info_index];
-                install_slotted_acmds(fighter);
-                install_slotted_statuses(fighter, &info.statuses);
             }
         }
 
         INITIALIZED[entry_id as usize] = true;
     }
 
-    if let Some(slotted_info) = slotted_agents.get(&fighter.agent_kind_hash.hash) {
-        if let Some(info_index) = SLOTTED_INFO_INDEX[entry_id as usize] {
-            let info = &slotted_info[info_index];
-
-            if let Some(opff) = info.frame {
-                let f: OpffFunction = std::mem::transmute(opff);
-                f(fighter);
-            }
-        }
+    if let Some(f) = OPFF[entry_id as usize] {
+        f(fighter);
     }
 }
 
