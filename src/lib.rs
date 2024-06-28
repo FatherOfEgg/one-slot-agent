@@ -316,6 +316,15 @@ impl SlottedAgent {
 
             if let Some(slotted_info) = SLOTTED_AGENTS.read().get(&self.hash) {
                 if let Some(info) = slotted_info.iter().find(|info| self.color == info.color) {
+                    if self.is_cloned {
+                        info.statuses
+                            .iter()
+                            .filter(|status| status.kind != 0)
+                            .for_each(|status| {
+                                self.agent.status(Pre, status.kind, f);
+                            });
+                    }
+
                     if info.frame.is_some() {
                         self.agent.on_line(Main, installer::weapon_opff);
                     }
