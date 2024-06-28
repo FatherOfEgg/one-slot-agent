@@ -12,25 +12,37 @@ static mut INITIALIZED: [bool; 8] = [false; 8];
 static mut SLOTTED_INFO_INDEX: [Option<usize>; 8] = [None; 8];
 static mut OPFF: [Option<OpffFunction>; 8] = [None; 8];
 
+static mut COLOR_BOOL_CONVERTED: bool = false;
+
 pub unsafe extern "C" fn on_start(fighter: &mut L2CFighterCommon) {
     INITIALIZED.fill(false);
     SLOTTED_INFO_INDEX.fill(None);
     OPFF.fill(None);
 
-    let mut slotted_agents = SLOTTED_AGENTS.write();
+    if !COLOR_BOOL_CONVERTED {
+        let mut slotted_agents = SLOTTED_AGENTS.write();
 
-    if let Some(slotted_info) = slotted_agents.get_mut(&fighter.agent_kind_hash.hash) {
-        for (i, info) in slotted_info.iter_mut().enumerate() {
-            if let Some(c) = info.color_bool {
-                if info.color.is_empty() {
-                    info.color = (*c).iter()
-                        .enumerate()
-                        .filter_map(|(i, &v)| if v { Some(i as i32) } else { None })
-                        .collect();
-                    info.color_bool = None;
+        if let Some(slotted_info) = slotted_agents.get_mut(&fighter.agent_kind_hash.hash) {
+            for info in slotted_info.iter_mut() {
+                if let Some(c) = info.color_bool {
+                    if info.color.is_empty() {
+                        info.color = (*c).iter()
+                            .enumerate()
+                            .filter_map(|(i, &v)| if v { Some(i as i32) } else { None })
+                            .collect();
+                        info.color_bool = None;
+                    }
                 }
             }
+        }
 
+        COLOR_BOOL_CONVERTED = true;
+    }
+
+    let slotted_agents = SLOTTED_AGENTS.read();
+
+    if let Some(slotted_info) = slotted_agents.get(&fighter.agent_kind_hash.hash) {
+        for info in slotted_info.iter() {
             if let Some(on_start) = info.on_start {
                 let f: OnStartFunction = std::mem::transmute(on_start);
                 f(fighter);
