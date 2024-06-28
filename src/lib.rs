@@ -224,6 +224,17 @@ impl SlottedAgent {
     }
 
     #[allow(unused)]
+    pub fn status2<M: StatusLineMarker, T>(
+        &mut self,
+        line: M,
+        kind: i32,
+        function: M::Function<T>,
+    ) -> &mut Self {
+        self.agent.status(line, kind, function);
+        self
+    }
+
+    #[allow(unused)]
     pub fn on_line<M: StatusLineMarker, T>(
         &mut self,
         line: M,
